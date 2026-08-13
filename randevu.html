@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gökhan Kodak Berber Salonu & Admin Paneli</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f3f4f6; }
+        * { box-sizing: border-box; }
+        a { text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const INSTAGRAM_URL = "https://www.instagram.com/gokhankodakk?igsh=MW5kY2M1dDhqb3d3Mw==";
+        
+        // --- GERÇEK DÜKKAN KONUMU VE LİNKLERİ ---
+        const GOOGLE_MAPS_EXACT_URL = "https://maps.app.goo.gl/bCvhKuYByBVXoQ4h6";
+        const YANDEX_NAV_URL = "https://yandex.com.tr/harita/?text=Gokhan+Kodak+Berber+Adana";
+
+        // Render canlı sunucu adresinizi yayına aldığınızda buraya yazacaksınız
+        const BACKEND_URL = "http://localhost:3000/api/randevu-al"; 
+
+        const SERVICES = [
+          { id: 1, name: 'Saç Kesimi', price: 300, duration: 45 },
+          { id: 2, name: 'Sakal Tıraşı', price: 150,  },
+          { id: 3, name: 'Cilt Bakımı', price: 250,  },
+          { id: 4, name: 'Saç Yıkama & Fön', price: 100,  },
+          { id: 5, name: 'Ağda & Kaş Alımı', price: 100,  }
+        ];
+
+        const TIME_SLOTS = [
+          '10:00', '10:30', '11:00', '11:30', '12:00', 
+          '13:00', '13:30', '14:00', '14:30', '15:00', '15:30',
+          '16:00', '16:30', '17:00', '17:30', '18:00', '18:30',
+          '19:00', '19:30', '20:00', '20:30', '21:00', '21:30', '22:00'
+        ];
+
+        function App() {
+          const [mode, setMode] = useState('customer');
+          const [adminPassword, setAdminPassword] = useState('');
+          const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+          const [loading, setLoading] = useState(false);
+
+          const [appointments, setAppointments] = useState(() => {
+            const saved = localStorage.getItem('gokhan_kodak_randevular');
+            return saved ? JSON.parse(saved) : [];
+          });
+
+          const [selectedServices, setSelectedServices] = useState([]);
+          const [selectedDate, setSelectedDate] = useState('');
+          const [selectedTime, setSelectedTime] = useState('');
+          const [customerInfo, setCustomerInfo] = useState({ name: '', phone: '' });
+          const [isSubmitted, setIsSubmitted] = useState(false);
+
+          useEffect(() => {
+            localStorage.setItem('gokhan_kodak_randevular', JSON.stringify(appointments));
+          }, [appointments]);
+
+          const toggleService = (id) => {
+            if (selectedServices.includes(id)) {
+              setSelectedServices(selectedServices.filter(sId => sId !== id));
+            } else {
+              setSelectedServices([...selectedServices, id]);
+            }
+          };
+
+          const selectedServicesData = SERVICES.filter(s => selectedServices.includes(s.id));
+          const totalPrice = selectedServicesData.reduce((acc, curr) => acc + curr.price, 0);
+          const totalDuration = selectedServicesData.reduce((acc, curr) => acc + curr.duration, 0);
+
+          const handleSubmit = async (e) => {
+            e.preventDefault();
+            setLoading(true);
+
+            const appointmentData = {
+              name: customerInfo.name,
+              phone: customerInfo.phone,
+              services: selectedServicesData.map(s => s.name).join(', '),
+              totalPrice,
+              totalDuration,
+              date: selectedDate,
+              time: selectedTime
+            };
+
+            try {
+              const response = await fetch(BACKEND_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(appointmentData)
+              });
+
+              const data = await response.json();
+
+              if (data.success) {
+                const newAppointment = { id: Date.now(), ...appointmentData, customerName: customerInfo.name, customerPhone: customerInfo.phone };
+                setAppointments([newAppointment, ...appointments]);
+                setIsSubmitted(true);
+              } else {
+                alert('Randevu iletilirken sunucu hatası oluştu.');
+              }
+            } catch (err) {
+              alert('Arka plan sunucusuna bağlanılamadı!');
+            } finally {
+              setLoading(false);
+            }
+          };
+
+          const handleAdminLogin = (e) => {
+            e.preventDefault();
+            if (adminPassword === 'gokhan01kodak33') {
+              setIsAdminLoggedIn(true);
+            } else {
+              alert('Hatalı şifre!');
+            }
+          };
+
+          const deleteAppointment = (id) => {
+            if (confirm('Bu randevuyu silmek istediğinize emin misiniz?')) {
+              setAppointments(appointments.filter(a => a.id !== id));
+            }
+          };
+
+          return (
+            <div style={{ minHeight: '100vh', padding: '20px' }}>
+              <div style={{ maxWidth: '700px', margin: '0 auto', backgroundColor: 'white', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                
+                {/* Header */}
+                <div style={{ backgroundColor: '#0f172a', color: 'white', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h1 style={{ margin: 0, fontSize: '20px' }}>Gökhan Kodak Berber Salonu</h1>
+                    <p style={{ color: '#94a3b8', fontSize: '12px', margin: '4px 0 0 0' }}>Otomatik Randevu & Konum Paneli</p>
+                  </div>
+                  <div>
+                    <button onClick={() => setMode('customer')} style={{ padding: '8px 12px', borderRadius: '8px', border: 'none', backgroundColor: mode === 'customer' ? '#2563eb' : '#334155', color: 'white', cursor: 'pointer', marginRight: '6px', fontSize: '13px' }}>
+                      Müşteri Ekranı
+                    </button>
+                    <button onClick={() => setMode('admin')} style={{ padding: '8px 12px', borderRadius: '8px', border: 'none', backgroundColor: mode === 'admin' ? '#2563eb' : '#334155', color: 'white', cursor: 'pointer', fontSize: '13px' }}>
+                      Gökhan Usta (Admin)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Müşteri Ekranı */}
+                {mode === 'customer' && (
+                  <div style={{ padding: '24px' }}>
+                    {isSubmitted ? (
+                      <div style={{ textAlign: 'center', padding: '20px' }}>
+                        <h2 style={{ color: '#16a34a' }}>✓ Randevunuz Başarıyla Oluşturuldu!</h2>
+                        <p style={{ color: '#4b5563', lineHeight: '1.6' }}>
+                          Sayın <b>{customerInfo.name}</b>, randevu bildiriminiz otomatik olarak WhatsApp üzerinden Gökhan Usta'ya ve telefonunuza iletilmiştir.
+                        </p>
+                        <button onClick={() => { setIsSubmitted(false); setSelectedServices([]); setSelectedTime(''); }} style={{ backgroundColor: '#2563eb', color: 'white', padding: '12px 24px', borderRadius: '12px', border: 'none', fontWeight: 'bold', cursor: 'pointer', marginTop: '16px' }}>
+                          Yeni Randevu Al
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ marginBottom: '24px' }}>
+                          <h3 style={{ fontSize: '14px', color: '#374151', marginBottom: '12px' }}>1. Yapılacak İşlemleri Seçin</h3>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                            {SERVICES.map((service) => {
+                              const isSelected = selectedServices.includes(service.id);
+                              return (
+                                <button key={service.id} onClick={() => toggleService(service.id)} style={{ padding: '14px', borderRadius: '12px', border: isSelected ? '2px solid #2563eb' : '1px solid #e5e7eb', backgroundColor: isSelected ? '#eff6ff' : 'white', cursor: 'pointer', textAlign: 'left' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                    <span style={{ fontWeight: 'bold' }}>{service.name}</span>
+                                    <span>{isSelected ? '✓' : ''}</span>
+                                  </div>
+                                  <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>{service.duration} dk • {service.price} TL</div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {selectedServices.length > 0 && (
+                            <div style={{ marginTop: '12px', padding: '12px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+                              <span>Seçilen: <b>{selectedServices.length} İşlem</b> ({totalDuration} dk)</span>
+                              <b>Toplam: {totalPrice} TL</b>
+                            </div>
+                          )}
+                        </div>
+
+                        {selectedServices.length > 0 && (
+                          <div style={{ marginBottom: '24px' }}>
+                            <h3 style={{ fontSize: '14px', color: '#374151', marginBottom: '12px' }}>2. Tarih ve Saat Seçin (13:00 - 22:00)</h3>
+                            <input type="date" onChange={(e) => setSelectedDate(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #e5e7eb', marginBottom: '12px' }} />
+                            {selectedDate && (
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+                                {TIME_SLOTS.map((time) => (
+                                  <button key={time} onClick={() => setSelectedTime(time)} style={{ padding: '10px', borderRadius: '8px', border: selectedTime === time ? 'none' : '1px solid #e5e7eb', backgroundColor: selectedTime === time ? '#2563eb' : 'white', color: selectedTime === time ? 'white' : '#374151', cursor: 'pointer', fontWeight: 'bold' }}>
+                                    {time}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {selectedTime && (
+                          <form onSubmit={handleSubmit} style={{ borderTop: '1px solid #e5e7eb', paddingTop: '20px' }}>
+                            <h3 style={{ fontSize: '14px', color: '#374151', marginBottom: '12px' }}>3. Bilgilerinizi Girin</h3>
+                            <input type="text" placeholder="Adınız Soyadınız" required value={customerInfo.name} onChange={(e) => setCustomerInfo({ ...customerInfo, name: e.target.value })} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #e5e7eb', marginBottom: '12px' }} />
+                            <input type="tel" placeholder="Telefon Numaranız" required value={customerInfo.phone} onChange={(e) => setCustomerInfo({ ...customerInfo, phone: e.target.value })} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #e5e7eb', marginBottom: '16px' }} />
+                            <button type="submit" disabled={loading} style={{ width: '100%', backgroundColor: loading ? '#9ca3af' : '#16a34a', color: 'white', padding: '16px', borderRadius: '12px', border: 'none', fontWeight: 'bold', cursor: 'pointer', fontSize: '16px' }}>
+                              {loading ? 'Randevu İletiliyor...' : `🚀 Otomatik Randevu Al (${totalPrice} TL)`}
+                            </button>
+                          </form>
+                        )}
+
+                        {/* Yol Tarifi ve Harita Bölümü */}
+                        <div style={{ marginTop: '32px', borderTop: '1px solid #e5e7eb', paddingTop: '20px' }}>
+                          <h3 style={{ fontSize: '15px', color: '#0f172a', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            📍 Salon Konumu & Yol Tarifi
+                          </h3>
+                          <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 12px 0' }}>Google Haritalar üzerinden salonumuzu kolayca bulun.</p>
+                          
+                          <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+                            <a href={GOOGLE_MAPS_EXACT_URL} target="_blank" rel="noopener noreferrer" style={{ flex: 1, backgroundColor: '#4285F4', color: 'white', textAlign: 'center', padding: '12px', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', display: 'inline-block' }}>
+                              🗺️ Google Maps ile Yol Tarifi Al
+                            </a>
+                          </div>
+
+                          <div style={{ width: '100%', height: '220px', borderRadius: '12px', overflow: 'hidden', border: '1px solid #e5e7eb' }}>
+                            <iframe
+                              title="Dükkan Konumu"
+                              width="100%"
+                              height="100%"
+                              style={{ border: 0 }}
+                              loading="lazy"
+                              allowFullScreen
+                              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3188.1068832811467!2d35.3197!3d36.9935!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMzbCsDU5JzM2LjYiTiAzNcKwMTknMTAuOSJF!5e0!3m2!1str!2str!4v1700000000000"
+                            ></iframe>
+                          </div>
+                        </div>
+
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* Admin Ekranı */}
+                {mode === 'admin' && (
+                  <div style={{ padding: '24px' }}>
+                    {!isAdminLoggedIn ? (
+                      <form onSubmit={handleAdminLogin} style={{ maxWidth: '300px', margin: '40px auto', textAlign: 'center' }}>
+                        <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>Gökhan Usta Yönetici Girişi</h2>
+                        <input type="password" placeholder="Şifrenizi Girin" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #d1d5db', marginBottom: '12px' }} />
+                        <button type="submit" style={{ width: '100%', backgroundColor: '#0f172a', color: 'white', padding: '12px', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>Giriş Yap</button>
+                      </form>
+                    ) : (
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                          <h2 style={{ fontSize: '18px', margin: 0 }}>Gelen Randevu Listesi ({appointments.length})</h2>
+                          <button onClick={() => setIsAdminLoggedIn(false)} style={{ color: '#ef4444', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold' }}>Çıkış Yap</button>
+                        </div>
+                        {appointments.length === 0 ? (
+                          <p style={{ color: '#6b7280', textAlign: 'center', padding: '40px 0' }}>Henüz alınmış bir randevu bulunmuyor.</p>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            {appointments.map((item) => (
+                              <div key={item.id} style={{ border: '1px solid #e5e7eb', borderRadius: '12px', padding: '16px', backgroundColor: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div>
+                                  <div style={{ fontWeight: 'bold', fontSize: '16px', color: '#0f172a' }}>{item.customerName} - <a href={`tel:${item.customerPhone}`} style={{ color: '#2563eb' }}>{item.customerPhone}</a></div>
+                                  <div style={{ fontSize: '13px', color: '#475569', marginTop: '4px' }}>✂️ <b>İşlemler:</b> {item.services}</div>
+                                  <div style={{ fontSize: '13px', color: '#166534', marginTop: '4px' }}>📅 <b>Tarih/Saat:</b> {item.date} - <b>{item.time}</b> ({item.totalDuration} dk)</div>
+                                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>💰 <b>Tutar:</b> {item.totalPrice} TL</div>
+                                </div>
+                                <button onClick={() => deleteAppointment(item.id)} style={{ backgroundColor: '#fee2e2', color: '#dc2626', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>Sil / Tamamlandı</button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Footer */}
+                <div style={{ borderTop: '1px solid #e5e7eb', padding: '16px', textAlign: 'center', backgroundColor: '#fafafa' }}>
+                  <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" style={{ color: '#e1306c', fontWeight: 'bold', fontSize: '14px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    <span>📸 Instagram: @gokhankodakk</span>
+                  </a>
+                </div>
+
+              </div>
+            </div>
+          );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
