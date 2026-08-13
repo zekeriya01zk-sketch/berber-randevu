@@ -2,9 +2,11 @@ const express = require('express');
 const cors = require('cors');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
 // Middleware
 app.use(cors());
@@ -13,21 +15,34 @@ app.use(express.json());
 // Berber / Admin Telefon Numarası
 const BERBER_TELEFON = "905539578598"; 
 
-// Render/Linux sunucularda Chromium'un sorunsuz çalışması için Puppeteer konfigürasyonu
+// Render üzerinde npx puppeteer ile indirilen Chrome'un tam yolu
+const installedChromePath = '/opt/render/project/src/.cache/puppeteer/chrome/linux-121.0.6167.85/chrome-linux64/chrome';
+
+// puppeteer konfigürasyonunu hazırlama
+const puppeteerOptions = {
+    headless: true,
+    args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--disable-gpu'
+    ]
+};
+
+// Eğer belirtilen dizinde Chrome çalıştırıcısı varsa executablePath olarak ekle
+if (fs.existsSync(installedChromePath)) {
+    console.log(`✅ Özel Chrome yolu bulundu: ${installedChromePath}`);
+    puppeteerOptions.executablePath = installedChromePath;
+} else {
+    console.log('⚠️ Özel Chrome yolu bulunamadı, varsayılan puppeteer/chrome aratılacak.');
+}
+
 const client = new Client({
     authStrategy: new LocalAuth(),
-    puppeteer: {
-        headless: true,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--disable-gpu'
-        ]
-    }
+    puppeteer: puppeteerOptions
 });
 
 // Terminalde / Render Logs sayfasında QR Kod oluşturma
