@@ -4,68 +4,111 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 
 const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Gökhan Usta Telefon Numarası
-const USTANIN_TELEFONU = "905539578598@c.us";
+// Berber / Admin Telefon Numarası
+const BERBER_TELEFON = "905539578598"; 
 
-// WhatsApp Client Kurulumu (Oturum bilgileri saklanır)
+// Render/Linux sunucularda Chromium'un sorunsuz çalışması için Puppeteer konfigürasyonu
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        headless: true,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--disable-gpu'
+        ]
     }
 });
 
-// Terminalde QR Kod Gösterimi
+// Terminalde / Render Logs sayfasında QR Kod oluşturma
 client.on('qr', (qr) => {
-    console.log('\n--- WHATSAPP BAGLANTISI ---');
-    console.log('Lutfen asagidaki QR kodu WhatsApp Business uygulamanizdan taratin:\n');
+    console.log('====================================================');
+    console.log('📱 WHATSAPP QR KODU HAZIR! LÜTFEN TELEFONUNUZDAN TARATIN:');
+    console.log('====================================================');
     qrcode.generate(qr, { small: true });
 });
 
+// WhatsApp Bağlantı Durumu
 client.on('ready', () => {
-    console.log('\n✅ WhatsApp Otomatik Mesaj Sistemi Başarıyla Bağlandı ve Hazır!');
+    console.log('✅ WhatsApp Web Başarıyla Bağlandı ve Hazır!');
 });
 
-// Randevu Alma API Endpoint'i
+client.on('authenticated', () => {
+    console.log('🔑 WhatsApp Oturumu Doğrulandı.');
+});
+
+client.on('auth_failure', (msg) => {
+    console.error('❌ WhatsApp Oturum Hatası:', msg);
+});
+
+client.on('disconnected', (reason) => {
+    console.log('⚠️ WhatsApp Bağlantısı Koptu:', reason);
+});
+
+// WhatsApp İstemcisini Başlat
+client.initialize();
+
+// Test Endpoint (Sunucunun çalışıp çalışmadığını kontrol etmek için)
+app.get('/', (req, res) => {
+    res.send('Berber Randevu Backend Sunucusu Aktif!');
+});
+
+// Randevu Alma Endpoint'i
 app.post('/api/randevu-al', async (req, res) => {
-    const { name, phone, services, date, time, totalPrice, totalDuration } = req.body;
-
-    console.log(`\n📩 Yeni Randevu İsteği Geldi: ${name} (${phone})`);
-
-    const mesaj = `💈 *YENİ RANDEVU TALEBİ* 💈\n\n` +
-                  `👤 *Müşteri:* ${name}\n` +
-                  `📞 *Telefon:* ${phone}\n` +
-                  `✂️ *İşlemler:* ${services}\n` +
-                  `📅 *Tarih:* ${date}\n` +
-                  `⏰ *Saat:* ${time}\n` +
-                  `💰 *Toplam Tutar:* ${totalPrice} TL (${totalDuration} dk)`;
-
     try {
-        // 1. Sana Bildirim Mesajı Atar
-        await client.sendMessage(USTANIN_TELEFONU, mesaj);
+        const { customerInfo, services, selectedDate, selectedTime, totalPrice, totalDuration } = req.body;
 
-        // 2. Müşteriye Otomatik Onay Mesajı Atar
-        const temizTel = phone.replace(/\D/g, '');
-        const musteriFormatliTel = `90${temizTel.slice(-10)}@c.us`;
-        
-        const musteriMesaj = `Merhaba Sayın *${name}*,\n\n${date} - ${time} tarihli randevu talebiniz Gökhan Kodak Berber Salonu'na ulaşmıştır.\n\nBizi tercih ettiğiniz için teşekkür ederiz! 💈`;
-        
-        await client.sendMessage(musteriFormatliTel, musteriMesaj);
+        if (!customerInfo || !services || !selectedDate || !selectedTime) {
+            return res.status(400).json({ success: false, message: 'Lütfen tüm alanları doldurun.' });
+        }
 
-        console.log('✅ Mesajlar hem ustaya hem müşteriye otomatik iletildi.');
-        res.status(200).json({ success: true, message: 'Randevu başarıyla iletildi.' });
+        const serviceNames = services.map(s => s.name).join(', ');
+
+        // WhatsApp Bildirim Mesajı Formatı
+        const whatsappMessage = 
+`💈 *YENİ RANDEVU TALEBİ!* 💈
+
+👤 *Müşteri Adı:* ${customerInfo.name}
+📞 *Telefon:* ${customerInfo.phone}
+
+✂️ *Alınan Hizmetler:* ${serviceNames}
+📅 *Tarih:* ${selectedDate}
+⏰ *Saat:* ${selectedTime} (${totalDuration} dk)
+💰 *Toplam Tutar:* ${totalPrice} TL
+
+_Bu mesaj Berber Randevu Sistemi tarafından otomatik gönderilmiştir._`;
+
+        // Berber numarasına WhatsApp mesajı gönder
+        const formattedNumber = `${BERBER_TELEFON}@c.us`;
+        await client.sendMessage(formattedNumber, whatsappMessage);
+
+        console.log(`📩 Yeni Randevu Bildirimi Gönderildi: ${customerInfo.name} - ${selectedDate} ${selectedTime}`);
+
+        res.status(200).json({ 
+            success: true, 
+            message: 'Randevunuz başarıyla oluşturuldu ve berbere iletildi.' 
+        });
+
     } catch (error) {
-        console.error('❌ Mesaj gönderme hatası:', error);
-        res.status(500).json({ success: false, message: 'WhatsApp mesajı gönderilemedi.' });
+        console.error('❌ Randevu İşleme Hatası:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Randevu iletilirken bir sunucu hatası oluştu.' 
+        });
     }
 });
 
-const PORT = 3000;
+// Sunucuyu Dinlemeye Başla
 app.listen(PORT, () => {
-    console.log(`🚀 Arka plan sunucusu http://localhost:${PORT} üzerinde çalışıyor...`);
+    console.log(`🚀 Sunucu ${PORT} portunda çalışıyor.`);
 });
-
-client.initialize();
